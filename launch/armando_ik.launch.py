@@ -34,11 +34,11 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'robot_description': robot_description_content,
-            'use_sim_time': True
+            'use_sim_time': False
         }]
     )
 
     return LaunchDescription([
-        #static_tf_node,  
+        static_tf_node,  
         armando_ik_node
     ])
