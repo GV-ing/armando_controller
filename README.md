@@ -1,4 +1,4 @@
-##  Nodi Disponibili e Modalità di Controllo
+#  Nodi Disponibili e Modalità di Controllo
 
 Il pacchetto `armando_controller` offre tre modalità principali per gestire il robot:
 
@@ -30,7 +30,7 @@ Esegue una sequenza automatizzata temporizzata di "Pick and Place". Il robot si 
 
 *Mappatura cubi: `a=ID 0`, `b=ID 1`, `c=ID 2`, `d=ID 3`.*
 
-# Controllo Dinamico IK 
+### Controllo Dinamico IK 
 
 Questo nodo utilizza la Cinematica Inversa (IK) analitica per raggiungere i target (Marker ArUco) rilevati dalla telecamera. 
 
