@@ -33,6 +33,7 @@ def generate_launch_description():
         name='armando_ik_node',
         output='screen',
         parameters=[{
+            'target_id': 3,
             'robot_description': robot_description_content,
             'use_sim_time': False
         }]
