@@ -1,58 +1,54 @@
-#  Nodi Disponibili e Modalità di Controllo
+## Available Nodes and Control Modes
 
-Il pacchetto `armando_controller` offre tre modalità principali per gestire il robot:
+The `armando_controller` package offers three main modes to manage the robot:
 
-###  Controllo a Pose Predefinite
-Permette di inviare il robot in posizioni articolari specifiche salvate nel file `config/poses.yaml`. Utilizza un **Action Client** per garantire movimenti fluidi e sincronizzati.
+### Predefined Pose Control
+Allows sending the robot to specific joint positions saved in the `config/poses.yaml` file. It uses an **Action Client** to ensure smooth and synchronized movements.
 
-*   **Avvio:**
+* **Run:**
     ```bash
     ros2 run armando_controller armando_controller_node --ros-args -p pose:="pos0"
+    ```
+*(Replace `pos0` with the desired pose name or `home` to reset).*
 
-*(Sostituisci `pos0` con il nome della posa desiderata o `home` per resettare).*
+### Complete Automation
+Executes a timed, automated "Pick and Place" sequence. The robot moves between different poses and activates/deactivates Gazebo plugins to grab and release the cubes.
 
-### Automazione Completa 
-
-Esegue una sequenza automatizzata temporizzata di "Pick and Place". Il robot si sposta tra diverse pose e attiva/disattiva i plugin Gazebo per afferrare e rilasciare i cubi.
-
-*   **Avvio:**
+* **Run:**
     ```bash
     ros2 run armando_controller armando_pick_place_node
-
-*   **Controllo Manuale Gripper:**
-    È possibile forzare l'aggancio o lo sgancio dei cubi (ID 0-3) tramite i seguenti topic:
+    ```
+* **Manual Gripper Control:**
+    You can force the attachment or detachment of the cubes (ID 0-3) via the following topics:
     ```bash
-    # Aggancia cubo A (ID 0)
+    # Attach cube A (ID 0)
     ros2 topic pub --once /gripper/attach_a std_msgs/msg/Empty "{}"
 
-    # Sgancia cubo A (ID 0)
+    # Detach cube A (ID 0)
     ros2 topic pub --once /gripper/detach_a std_msgs/msg/Empty "{}"
+    ```
+*Cube mapping: `a=ID 0`, `b=ID 1`, `c=ID 2`, `d=ID 3`.*
 
-*Mappatura cubi: `a=ID 0`, `b=ID 1`, `c=ID 2`, `d=ID 3`.*
+### Dynamic IK Control
+This node uses analytical Inverse Kinematics (IK) to reach targets (ArUco Markers) detected by the camera.
 
-### Controllo Dinamico IK 
-
-Questo nodo utilizza la Cinematica Inversa (IK) analitica per raggiungere i target (Marker ArUco) rilevati dalla telecamera. 
-
-
-*   **Avvio:**
+* **Run:**
     ```bash
     ros2 launch armando_controller armando_ik.launch.py
-
-*   **Cambio Target in Real-Time:**
-    Cambia l'ID del cubo da inseguire senza riavviare il nodo:
+    ```
+* **Real-Time Target Change:**
+    Change the ID of the tracked cube without restarting the node:
     ```bash
     ros2 param set /armando_ik_node target_id 2
+    ```
+*(Use the desired ID or `-1` to return the arm to the Home position).*
 
-*(Usa l'ID desiderato o `-1` per far tornare il braccio in posizione Home).*
+## 🔧 Useful Commands & Debugging
 
+**Send the robot to the Home position (0,0,0,0)**
 
-🔧 Comandi Utili e Debug
-Inviare il robot in posizione Home (0,0,0,0)
-
-Se vuoi resettare la posa del braccio manualmente tramite l'Action Server:
-*  ```bash
-
+If you want to manually reset the arm pose via the Action Server:
+* ```bash
     ros2 action send_goal /joint_trajectory_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "{
         trajectory: {
             joint_names: ['j0', 'j1', 'j2', 'j3'],
@@ -63,6 +59,8 @@ Se vuoi resettare la posa del braccio manualmente tramite l'Action Server:
             }]
         }
     }"
-In alternativa, puoi usare il nodo controller con il parametro preimpostato:
-*  ```bash
+
+Alternatively, you can use the controller node with the preset parameter:
+
+* ```bash
     ros2 run armando_controller armando_controller_node --ros-args -p pose:="home"
