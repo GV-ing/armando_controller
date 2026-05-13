@@ -21,8 +21,8 @@ using GoalHandleFollowJointTrajectory = rclcpp_action::ClientGoalHandle<FollowJo
 class ArmandoIKNode : public rclcpp::Node {
 public:
     ArmandoIKNode() : Node("armando_ik_node") {
-        // Parametri
-        this->declare_parameter("target_id", 2);
+        // Parametri iniziali
+        this->declare_parameter("target_id", 0);
         this->declare_parameter<std::string>("controller_action_name", "/joint_trajectory_controller/follow_joint_trajectory");
 
         tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
@@ -43,32 +43,43 @@ public:
             "/contact_sensor_topic", 10, 
             std::bind(&ArmandoIKNode::contact_callback, this, std::placeholders::_1));
 
-        RCLCPP_INFO(this->get_logger(), "=== Armando IK Expert Online (V5 - Calibrated) ===");
+        RCLCPP_INFO(this->get_logger(), "=== Armando IK EXPERT (Full Version) Online ===");
+        RCLCPP_INFO(this->get_logger(), "Usa 'ros2 param set /armando_ik_node target_id -1' per tornare in HOME.");
     }
 
 private:
     void contact_callback(const std_msgs::msg::Bool::SharedPtr msg) {
         if (msg->data && !target_touched_) {
             target_touched_ = true;
-            RCLCPP_INFO(this->get_logger(), "!!! CONTATTO !!! Bersaglio preso.");
+            RCLCPP_INFO(this->get_logger(), "!!! CONTATTO RILEVATO !!!");
         }
     }
 
     void marker_callback(const aruco_msgs::msg::MarkerArray::SharedPtr msg) {
-        if (target_touched_ || msg->markers.empty()) return;
-
         int current_target_id = this->get_parameter("target_id").as_int();
         
-        // Cambio target dinamico
+        // Se l'utente chiede il target -1, mandiamo il robot in HOME e usciamo
+        if (current_target_id == -1) {
+            if (last_target_id_ != -1) {
+                RCLCPP_INFO(this->get_logger(), "Comando HOME ricevuto. Rientro...");
+                send_action_goal({0.0, 0.0, 0.0, 0.0});
+                last_target_id_ = -1;
+                has_valid_target_ = false;
+            }
+            return;
+        }
+
+        if (target_touched_ || is_moving_) return;
+
+        // Rilevamento cambio target dinamico
         if (current_target_id != last_target_id_) {
             RCLCPP_INFO(this->get_logger(), "Passaggio a Target ID: %d", current_target_id);
             last_target_id_ = current_target_id;
             has_valid_target_ = false;
             last_target_x_ = -999.0;
-            is_moving_ = false;
         }
 
-        if (is_moving_) return;
+        if (msg->markers.empty()) return;
 
         for (const auto & marker : msg->markers) {
             if (marker.id == current_target_id) { 
@@ -94,20 +105,19 @@ private:
         double ty = out_pose.pose.position.y;
         double tz = out_pose.pose.position.z;
 
-        // Se è un nuovo target o si è mosso di 1cm
         double dist = std::sqrt(std::pow(tx - last_target_x_, 2) + std::pow(ty - last_target_y_, 2));
         
         if (!has_valid_target_ || dist >= 0.01) {
             std::vector<double> q_out;
             if (solve_ik_analytical(tx, ty, tz, q_out)) {
-                RCLCPP_INFO(this->get_logger(), "ID %d Rilevato a X:%.2f Y:%.2f Z:%.2f. Invio Goal.", last_target_id_, tx, ty, tz);
+                RCLCPP_INFO(this->get_logger(), "Target ID %d Reachable. Invio traiettoria...", last_target_id_);
                 send_action_goal(q_out);
                 last_target_x_ = tx;
                 last_target_y_ = ty;
                 has_valid_target_ = true;
             } else {
                 RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000, 
-                    "ID %d NON RAGGIUNGIBILE! Coordinate relative: X:%.2f Y:%.2f Z:%.2f", last_target_id_, tx, ty, tz);
+                    "ID %d FUORI PORTATA FISICA (X:%.2f Y:%.2f Z:%.2f)", last_target_id_, tx, ty, tz);
             }
         }
     }
@@ -115,24 +125,23 @@ private:
     bool solve_ik_analytical(double x, double y, double z, std::vector<double>& q_out) {
         q_out.resize(4, 0.0);
         
-        // Parametri 
+        // Parametri Reali + Margine di Elasticità (0.004m) per i limiti del tavolo
         double z_off = 0.1015; 
-        double l1 = 0.1150; // Manteniamo la tolleranza virtuale per la distanza radiale
+        double l1 = 0.1150; 
         double l2 = 0.1150; 
         double l3 = 0.0750;
 
-        // 1. Calcolo Base (j0) assoluto
+        // 1. Calcolo Base (j0) con Correzione Offset URDF
         double q0 = std::atan2(y, x); 
         
-        // --- IL FIX DEFINITIVO (URDF OFFSET) ---
-        // L'URDF ha rpy="0 0 -1.57" su j0. Lo zero del motore guarda a -90 gradi.
-        // Per correggere questo sfasamento, SOMMIAMO +90 gradi.
-        double q0_cmd = q0 - (M_PI / 2.0);
+        // Correzione basata sul tuo rpy="0 0 -1.57" dell'URDF
+        // Se il braccio va dal lato opposto, cambia + in -
+        double q0_cmd = q0 - (M_PI / 2.0); 
         
-        // Normalizzazione sicura tra -PI e +PI per evitare che il comando superi i limiti URDF
         while (q0_cmd > M_PI) q0_cmd -= 2.0 * M_PI;
         while (q0_cmd < -M_PI) q0_cmd += 2.0 * M_PI;
 
+        // 2. Cinematica 2D sul piano radiale
         double r = std::sqrt(x*x + y*y);
         double phi = -M_PI / 2.0; 
 
@@ -140,8 +149,9 @@ private:
         double zw = (z - z_off) - l3 * std::sin(phi);
         double d = std::sqrt(rw*rw + zw*zw);
 
-        if (d > (l1 + l2)) return false;
+        if (d > (l1 + l2) || d < std::abs(l1 - l2)) return false;
 
+        // 3. Calcolo angoli interni
         double cos_q2 = (d*d - l1*l1 - l2*l2) / (2 * l1 * l2);
         if (cos_q2 > 1.0) cos_q2 = 1.0; 
         if (cos_q2 < -1.0) cos_q2 = -1.0;
@@ -152,8 +162,9 @@ private:
         double beta = std::acos((l1*l1 + d*d - l2*l2) / (2 * l1 * d));
         double q1 = alpha + beta;
 
+        // 4. Mappatura sui giunti Armando
         q_out[0] = q0_cmd; 
-        q_out[1] = q1 - (M_PI / 2.0); // Offset verticale della spalla (corretto)
+        q_out[1] = q1 - (M_PI / 2.0); 
         q_out[2] = q2;
         q_out[3] = phi - (q1 + q2);
 
@@ -162,7 +173,6 @@ private:
 
     void send_action_goal(const std::vector<double>& positions) {
         if (!action_client_->wait_for_action_server(std::chrono::seconds(2))) {
-            RCLCPP_ERROR(this->get_logger(), "Action server non disponibile!");
             return;
         }
 
@@ -189,14 +199,14 @@ private:
         send_goal_options.result_callback = [this](const GoalHandleFollowJointTrajectory::WrappedResult & result) {
             this->is_moving_ = false;
             if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
-                RCLCPP_INFO(this->get_logger(), "Arrivato sul Cubo!");
+                RCLCPP_INFO(this->get_logger(), "Movimento completato.");
             }
         };
 
         action_client_->async_send_goal(goal_msg, send_goal_options);
     }
 
-    // Variabili stato
+    // Memoria di stato
     int last_target_id_ = -1;
     bool target_touched_ = false;
     bool is_moving_ = false;

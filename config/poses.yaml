@@ -48,3 +48,5 @@ poses:
     positions: [-0.854, 1.300, 0.0, -0.6]
   #SGANCIO D
   #  # ros2 topic pub --once /gripper/detach_d std_msgs/msg/Empty "{}"
+  home:
+    positions: [0, 0, 0, 0]
