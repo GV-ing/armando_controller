@@ -1,6 +1,3 @@
-
-
-
 #include <string>
 #include <rclcpp/rclcpp.hpp>
 #include <control_msgs/action/follow_joint_trajectory.hpp>
@@ -19,7 +16,7 @@ public:
     this->declare_parameter<std::string>("controller_name", "/joint_trajectory_controller/follow_joint_trajectory");
     std::string poses_file = this->get_parameter("poses_file").as_string();
     if (poses_file.empty()) {
-      // Usa il path installato del pacchetto
+      // Use the installed package share directory path
       std::string pkg_share = ament_index_cpp::get_package_share_directory("armando_controller");
       poses_file = pkg_share + "/config/poses.yaml";
     }
@@ -43,10 +40,10 @@ public:
     for (const auto& j : joint_names) {
       RCLCPP_INFO(this->get_logger(), "  %s", j.c_str());
     }
-    // Debug: stampa le posizioni che verranno inviate
+    // Debug: print positions that will be sent
     const auto& positions = poses_[pose_name];
     if (positions.size() != joint_names.size()) {
-      RCLCPP_ERROR(this->get_logger(), "Mismatch tra numero di giunti (%zu) e posizioni (%zu)", joint_names.size(), positions.size());
+      RCLCPP_ERROR(this->get_logger(), "Mismatch between joint count (%zu) and positions count (%zu)", joint_names.size(), positions.size());
       return;
     }
     if (!client_->wait_for_action_server(std::chrono::seconds(20))) {
@@ -59,8 +56,8 @@ public:
     point.positions = positions;
     point.time_from_start = rclcpp::Duration::from_seconds(2.0);
     goal_msg.trajectory.points.push_back(point);
-    // Non impostare header.stamp: lascia che il controller lo gestisca
-    RCLCPP_INFO(this->get_logger(), "Sending goal for pose '%s' con posizioni:", pose_name.c_str());
+    // Do not set header.stamp: let the controller handle it
+    RCLCPP_INFO(this->get_logger(), "Sending goal for pose '%s' with positions:", pose_name.c_str());
     for (size_t i = 0; i < point.positions.size(); ++i) {
       RCLCPP_INFO(this->get_logger(), "  %s: %f", joint_names[i].c_str(), point.positions[i]);
     }
@@ -101,7 +98,7 @@ int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<ArmandoController>();
 
-  // Dichiarazione e lettura del parametro "pose" dalla riga di comando
+  // Declare and read the "pose" parameter from command line
   node->declare_parameter<std::string>("pose", "pos0");
   std::string pose_name = node->get_parameter("pose").as_string();
   // Check if pose exists

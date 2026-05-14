@@ -13,8 +13,6 @@ find_package(control_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(ament_index_cpp REQUIRED)
-
-# --- AGGIUNGI QUESTE RIGHE (Mancavano i find_package) ---
 find_package(kdl_parser REQUIRED)
 find_package(orocos_kdl REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -25,7 +23,6 @@ find_package(aruco_msgs REQUIRED)
 
 include_directories(include)
 
-# --- Nodo Originale ---
 add_executable(armando_controller_node 
   src/armando_controller_node.cpp 
   src/pose_loader.cpp
@@ -40,7 +37,6 @@ ament_target_dependencies(armando_controller_node
 )
 target_link_libraries(armando_controller_node yaml-cpp)
 
-# --- Nodo: Armando Pick & Place ---
 add_executable(armando_pick_place_node 
   src/armando_pick_and_place.cpp
 )
@@ -51,7 +47,6 @@ ament_target_dependencies(armando_pick_place_node
   trajectory_msgs
 )
 
-# --- NUOVO Nodo: Armando IK Node ---
 add_executable(armando_ik_node src/armando_ik_node.cpp)
 
 ament_target_dependencies(armando_ik_node 
@@ -65,10 +60,9 @@ ament_target_dependencies(armando_ik_node
   tf2_geometry_msgs
   aruco_msgs
 )
-# Nota: Orocos KDL usa spesso i nomi delle variabili esportate o il target orocos-kdl
 target_link_libraries(armando_ik_node orocos-kdl)
 
-# --- Installazione ---
+
 install(TARGETS 
   armando_controller_node
   armando_pick_place_node
